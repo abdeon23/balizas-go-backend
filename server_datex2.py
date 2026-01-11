@@ -4,6 +4,7 @@ from flask_cors import CORS
 import requests
 import xml.etree.ElementTree as ET
 import time
+from flask import Flask, send_from_directory
 
 # ---------------------------
 # Configuración básica Flask
@@ -96,6 +97,10 @@ def fetch_balizas():
 # ---------------------------
 # Rutas API
 # ---------------------------
+@app.route('/')
+def serve_index():
+    return send_from_directory('.', 'index.html')  # busca index.html en la raíz del proyecto
+    
 @app.route('/api/balizas')
 def api_balizas():
     return jsonify(fetch_balizas())
@@ -169,6 +174,7 @@ if __name__ == "__main__":
     with app.app_context():  # Esto proporciona el contexto necesario
         setup_db()           # Crea la base de datos, logros y misiones
     app.run(host="0.0.0.0", port=5000)
+
 
 
 
