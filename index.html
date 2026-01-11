@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Balizas Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+  body { margin: 0; font-family: Arial, sans-serif; }
+  #map { height: 80vh; width: 100%; }
+  #panel { padding: 10px; height: 20vh; overflow-y: auto; background: #f4f4f4; }
+  .popup-btn { margin-top: 5px; padding: 3px 6px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 3px; }
+  .popup-btn:disabled { background: #aaa; cursor: not-allowed; }
+  #loginModal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); justify-content:center; align-items:center; }
+  #loginModalContent { background:white; padding:20px; border-radius:5px; width:300px; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="panel">
+  <h3>Ranking</h3>
+  <ul id="ranking"></ul>
+  <h3>Logros pendientes</h3>
+  <ul id="achievements"></ul>
+</div>
+
+<!-- Login modal -->
+<div id="loginModal">
+  <div id="loginModalContent">
+    <h3>Iniciar sesión / Registrarse</h3>
+    <input type="text" id="username" placeholder="Usuario" /><br><br>
+    <input type="password" id="password" placeholder="Contraseña" /><br><br>
+    <button id="loginBtn">Entrar</button>
+    <button id="registerBtn">Registrarse</button>
+  </div>
+</div>
+
+<script>
+let map = L.map('map').setView([40.4168, -3.7038], 6); // Centro de España
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(map);
+
+let balizas = [];
+let currentUser = null;
+
+// Icono divertido
+let balizaIcon = L.icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+  iconSize: [35, 35],
+});
+
+// Logros iniciales
+let achievementsList = [
+  "Primera baliza ayudada", "Ayuda exprés", "3 balizas en un día",
+  "5 balizas consecutivas", "Usuario solidario", "Maratón de balizas",
+  "Top 10", "Explorador de rutas", "Ayuda en todas las provincias", "Baliza legendaria"
+];
+
+function showAchievements() {
+  let ul = document.getElementById('achievements');
+  ul.innerHTML = '';
+  achievementsList.forEach(a => {
+    let li = document.createElement('li');
+    li.textContent = a;
+    ul.appendChild(li);
+  });
+}
+
+function showRanking() {
+  let ul = document.getElementById('ranking');
+  ul.innerHTML = '';
+  fetch('/api/ranking')
+    .then(r => r.json())
+    .then(data => {
+      data.forEach(u => {
+        let li = document.createElement('li');
+        li.textContent = `${u.username}: ${u.score} balizas`;
+        ul.appendChild(li);
+      });
+    })
+    .catch(e => console.log('No se pudo cargar ranking', e));
+}
+
+// Cargar balizas desde backend
+function loadBalizas() {
+  fetch('/api/balizas')
+    .then(r => r.json())
+    .then(data => {
+      balizas = data.map(b => ({...b, ayuda_enviada: false}));
+      balizas.forEach(b => {
+        let marker = L.marker([b.latitude, b.longitude], {icon: balizaIcon}).addTo(map);
+        marker.bindPopup(getPopupContent(b));
+        b.marker = marker;
+      });
+    })
+    .catch(e => console.log('Error cargando balizas', e));
+}
+
+function getPopupContent(baliza) {
+  let sent = baliza.ayuda_enviada;
+  let btnText = sent ? "Ayuda enviada" : "Enviar ayuda";
+  let btnDisabled = sent ? "disabled" : "";
+  return `<b>Baliza en apuros</b><br>${baliza.locality}<br>
+    <button class="popup-btn" ${btnDisabled} onclick="sendHelp('${baliza.id}')">${btnText}</button>`;
+}
+
+function sendHelp(id) {
+  if (!currentUser) { document.getElementById('loginModal').style.display = 'flex'; return; }
+  fetch(`/api/help/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user: currentUser})})
+    .then(r => r.json())
+    .then(res => {
+      let b = balizas.find(x => x.id === id);
+      b.ayuda_enviada = true;
+      b.marker.setPopupContent(getPopupContent(b));
+      showRanking();
+    });
+}
+
+// Login / Registro
+document.getElementById('loginBtn').onclick = () => {
+  let u = document.getElementById('username').value;
+  let p = document.getElementById('password').value;
+  fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p})})
+    .then(r=>r.json()).then(res=>{
+      if(res.success){currentUser=u; document.getElementById('loginModal').style.display='none'; showRanking();}
+      else alert('Error login');
+    });
+};
+
+document.getElementById('registerBtn').onclick = () => {
+  let u = document.getElementById('username').value;
+  let p = document.getElementById('password').value;
+  fetch('/api/register', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p})})
+    .then(r=>r.json()).then(res=>{
+      if(res.success){currentUser=u; document.getElementById('loginModal').style.display='none'; showRanking();}
+      else alert('Error registro');
+    });
+};
+
+// Inicializamos
+showAchievements();
+showRanking();
+loadBalizas();
+</script>
+
+</body>
+</html>
