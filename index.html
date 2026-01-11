@@ -105,10 +105,10 @@
       try{
         const res = await fetch("/api/balizas");
         const data = await res.json();
-        beacons = data.filter(item=>item.lat&&!isNaN(item.lat)&&item.lng&&!isNaN(item.lng)).map((item,i)=>({
+        beacons = data.filter(item=>item.lat&&!isNaN(item.lat)&&item.lon&&!isNaN(item.lon)).map((item,i)=>({
           id: item.id||`b${i}`,
           lat: parseFloat(item.lat),
-          lng: parseFloat(item.lng),
+          lon: parseFloat(item.lon),
           name:"Baliza DATEX2",
           description:item.municipality?`Localidad: ${item.municipality}`:"Origen: DATEX2",
           needsHelp:true
@@ -120,7 +120,7 @@
     function initMap(){
       beacons.forEach(b=>{
         try{
-          const marker = L.marker([b.lat,b.lng],{icon:b.needsHelp?iconNeedsHelp:iconHelped}).addTo(map);
+          const marker = L.marker([b.lat,b.lon],{icon:b.needsHelp?iconNeedsHelp:iconHelped}).addTo(map);
           marker.bindPopup(`<strong>Baliza en apuros</strong><br>${b.description}<br><em>Pulsa para enviar ayuda</em>`);
           marker.on("click",()=>handleSendHelp(b));
           beaconMarkers.set(b.id,marker);
