@@ -228,7 +228,7 @@
     }).addTo(map);
 
     const createBeaconIcon = (color) => L.icon({
-      iconUrl: "baliza.png",
+      iconUrl: "https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",
       iconSize: [30, 30],
       className: color === "red" ? "icon-red" : "icon-green",
     });
@@ -244,13 +244,15 @@
         const res = await fetch("https://balizas-go-backend-production.up.railway.app/api/balizas");
         const data = await res.json();
 
-        beacons = data.map((item, i) => ({
-          id: item.id || `b${i}`,
-          lat: parseFloat(item.lat),
-          lng: parseFloat(item.lng),
-          name: "Baliza DATEX2",
-          description: `${item.municipality || ""} (km ${item.km || "?"})`,
-          needsHelp: true,
+        beacons = data
+        .filter(item => !isNaN(parseFloat(item.lat)) && !isNaN(parseFloat(item.lng)))
+        .map((item, i) => ({
+        id: item.id || `b${i}`,
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lng),
+        name: "Baliza DATEX2",
+        description: `${item.municipality || ""} (km ${item.km || "?"})`,
+        needsHelp: true,
         }));
 
         console.log("Balizas cargadas:", beacons);
