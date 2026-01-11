@@ -1,176 +1,187 @@
+import time
+import requests
+import xml.etree.ElementTree as ET
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-import requests
-import xmltodict
-import time
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# ---------------- CONFIG ----------------
+
+DATEX_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
+CACHE_SECONDS = 300
+
+NAMESPACES = {
+    "sit": "http://datex2.eu/schema/3/situation",
+    "loc": "http://datex2.eu/schema/3/location",
+    "com": "http://datex2.eu/schema/3/common",
+    "lse": "http://datex2.eu/schema/3/locationExtension"
+}
+
+# ---------------- APP ----------------
 
 app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///game.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 CORS(app)
 
-# --- Database setup ---
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///balizas.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# --- Models ---
+# ---------------- MODELS ----------------
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True)
-    password = db.Column(db.String(50))
-    xp = db.Column(db.Integer, default=0)
-    level = db.Column(db.Integer, default=1)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    points = db.Column(db.Integer, default=0)
 
-# --- Globals ---
-DATEX2_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
+class Help(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer)
+    baliza_id = db.Column(db.String(50))
 
-# --- DATEX2 Parsing ---
-def fetch_datex2():
-    """Descarga XML DATEX2 v3.6 y lo convierte a dict Python."""
-    resp = requests.get(DATEX2_URL, timeout=12)
-    resp.raise_for_status()
-    xml_text = resp.text
-    data = xmltodict.parse(xml_text)
-    return data
+class Achievement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer)
+    name = db.Column(db.String(100))
 
-def extract_balizas_from_datex2(data):
-    """
-    Extrae solo eventos con <sit:causeType>vehicleObstruction</sit:causeType>.
-    Devuelve lista de balizas {id, lat, lng, municipality}.
-    """
+# ---------------- INIT ----------------
+
+with app.app_context():
+    db.create_all()
+
+# ---------------- DATEX CACHE ----------------
+
+_last_fetch = 0
+_cached_balizas = []
+
+def fetch_balizas():
+    global _last_fetch, _cached_balizas
+
+    if time.time() - _last_fetch < CACHE_SECONDS:
+        return _cached_balizas
+
+    r = requests.get(DATEX_URL, timeout=15)
+    root = ET.fromstring(r.content)
+
     balizas = []
-    try:
-        situations = data.get("d2LogicalModel", {}) \
-                         .get("payloadPublication", {}) \
-                         .get("situation", [])
 
-        if isinstance(situations, dict):
-            situations = [situations]
+    for situation in root.findall(".//sit:situation", NAMESPACES):
 
-        for situation in situations:
-            records = situation.get("situationRecord", [])
-            if isinstance(records, dict):
-                records = [records]
+        cause = situation.find(".//sit:causeType", NAMESPACES)
+        if cause is None or cause.text != "vehicleObstruction":
+            continue
 
-            for rec in records:
-                # Causa
-                cause = rec.get("cause", {})
-                cause_type = cause.get("causeType")
-                if cause_type != "vehicleObstruction":
-                    continue
+        lat = situation.find(".//loc:latitude", NAMESPACES)
+        lon = situation.find(".//loc:longitude", NAMESPACES)
 
-                # Coordenadas: try "to", then "from"
-                loc_ref = rec.get("locationReference", {})
-                linear = loc_ref.get("tpegLinearLocation", {})
+        if lat is None or lon is None:
+            continue
 
-                lat, lng = None, None
+        municipality = situation.find(".//lse:municipality", NAMESPACES)
+        road = situation.find(".//loc:roadName", NAMESPACES)
 
-                # To
-                to_pt = linear.get("to", {}) \
-                               .get("pointCoordinates", {})
-                if to_pt:
-                    lat = to_pt.get("latitude")
-                    lng = to_pt.get("longitude")
+        balizas.append({
+            "id": situation.attrib.get("id"),
+            "lat": float(lat.text),
+            "lon": float(lon.text),
+            "municipality": municipality.text if municipality is not None else "Desconocido",
+            "road": road.text if road is not None else ""
+        })
 
-                # From fallback
-                if not lat or not lng:
-                    from_pt = linear.get("from", {}) \
-                                     .get("pointCoordinates", {})
-                    lat = from_pt.get("latitude")
-                    lng = from_pt.get("longitude")
-
-                if not lat or not lng:
-                    continue
-
-                # Municipality (localidad)
-                municipality = None
-                ext = None
-                try:
-                    ext = to_pt.get("_tpegNonJunctionPointExtension", {}) \
-                               .get("extendedTpegNonJunctionPoint", {})
-                except Exception:
-                    pass
-                municipality = ext.get("municipality") if ext else "Desconocida"
-
-                try:
-                    lat = float(lat)
-                    lng = float(lng)
-                except:
-                    continue
-
-                rec_id = rec.get("@id", str(time.time()))
-
-                balizas.append({
-                    "id": rec_id,
-                    "lat": lat,
-                    "lng": lng,
-                    "municipality": municipality
-                })
-    except Exception as e:
-        print("Error extract_balizas:", e)
-
-    print(f"Balizas filtradas vehicleObstruction: {len(balizas)}")
+    _cached_balizas = balizas
+    _last_fetch = time.time()
+    print(f"Balizas extraídas: {len(balizas)}")
     return balizas
 
-# --- API Endpoints ---
+# ---------------- ACHIEVEMENTS ----------------
+
+def check_achievements(user):
+    total = Help.query.filter_by(user_id=user.id).count()
+
+    achievements = {
+        1: "Primera ayuda",
+        5: "5 ayudas enviadas",
+        10: "10 ayudas enviadas",
+        25: "25 ayudas enviadas"
+    }
+
+    for qty, name in achievements.items():
+        if total >= qty:
+            exists = Achievement.query.filter_by(user_id=user.id, name=name).first()
+            if not exists:
+                db.session.add(Achievement(user_id=user.id, name=name))
+
+    db.session.commit()
+
+# ---------------- API ----------------
 
 @app.route("/api/balizas")
-def api_balizas():
-    try:
-        data = fetch_datex2()
-        balizas = extract_balizas_from_datex2(data)
-        return jsonify(balizas)
-    except Exception as e:
-        print("Error /api/balizas:", e)
-        return jsonify({"error": "No se pudieron obtener balizas"}), 500
+def balizas():
+    return jsonify(fetch_balizas())
 
 @app.route("/api/register", methods=["POST"])
 def register():
     data = request.json
-    username = data.get("username")
-    password = data.get("password")
-    if User.query.filter_by(username=username).first():
+    if User.query.filter_by(username=data["username"]).first():
         return jsonify({"error": "Usuario ya existe"}), 400
-    user = User(username=username, password=password)
+
+    user = User(
+        username=data["username"],
+        password=generate_password_hash(data["password"])
+    )
     db.session.add(user)
     db.session.commit()
-    return jsonify({"message": "Usuario creado"}), 201
+    return jsonify({"ok": True})
 
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
-    username = data.get("username")
-    password = data.get("password")
-    user = User.query.filter_by(username=username, password=password).first()
-    if not user:
-        return jsonify({"error": "Usuario o contraseña incorrecta"}), 400
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "xp": user.xp,
-        "level": user.level
-    })
+    user = User.query.filter_by(username=data["username"]).first()
+    if not user or not check_password_hash(user.password, data["password"]):
+        return jsonify({"error": "Credenciales incorrectas"}), 401
 
-@app.route("/api/send_help", methods=["POST"])
+    return jsonify({"user_id": user.id, "points": user.points})
+
+@app.route("/api/help", methods=["POST"])
 def send_help():
     data = request.json
-    user_id = data.get("user_id")
-    user = User.query.get(user_id)
+    user = User.query.get(data["user_id"])
+
     if not user:
-        return jsonify({"error": "Usuario no encontrado"}), 400
-    user.xp += 20
-    if user.xp >= 100:
-        user.level += 1
-        user.xp -= 100
+        return jsonify({"error": "Usuario no válido"}), 400
+
+    already = Help.query.filter_by(
+        user_id=user.id,
+        baliza_id=data["baliza_id"]
+    ).first()
+
+    if already:
+        return jsonify({"error": "Ya ayudaste"}), 400
+
+    db.session.add(Help(user_id=user.id, baliza_id=data["baliza_id"]))
+    user.points += 10
     db.session.commit()
-    return jsonify({"xp": user.xp, "level": user.level})
+
+    check_achievements(user)
+
+    return jsonify({"ok": True, "points": user.points})
 
 @app.route("/api/ranking")
 def ranking():
-    users = User.query.order_by(User.level.desc(), User.xp.desc()).limit(10).all()
-    return jsonify([{"username": u.username, "xp": u.xp, "level": u.level} for u in users])
+    users = User.query.order_by(User.points.desc()).limit(20)
+    return jsonify([
+        {"username": u.username, "points": u.points}
+        for u in users
+    ])
 
-# --- Create DB and Run ---
+@app.route("/api/achievements/<int:user_id>")
+def achievements(user_id):
+    ach = Achievement.query.filter_by(user_id=user_id)
+    return jsonify([a.name for a in ach])
+
+# ---------------- RUN ----------------
+
 
 if __name__ == "__main__":
     with app.app_context():
