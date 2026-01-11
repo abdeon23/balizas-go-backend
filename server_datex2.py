@@ -1,159 +1,147 @@
-from flask import Flask, jsonify
-from flask_cors import CORS   # <--- añade esto
+from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 import requests
 import xmltodict
 import time
-import sqlite3
 
 app = Flask(__name__)
-CORS(app)  # <--- esto permite CORS para todo el backend
+CORS(app)  # Permite llamadas desde cualquier origen
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///balizas.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-DATEX2_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
+DATEX2_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/incidencias.xml"
 
-# Cache simple para no descargar a cada request
-cache = {"timestamp": 0, "data": []}
-CACHE_TTL = 60  # segundos
+# -------------------
+# MODELOS DE DATOS
+# -------------------
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True)
+    password = db.Column(db.String(50))  # simple para demo
+    xp = db.Column(db.Integer, default=0)
+    level = db.Column(db.Integer, default=1)
 
-def init_db():
-    conn = sqlite3.connect('balizas.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            xp INTEGER DEFAULT 0,
-            level INTEGER DEFAULT 1,
-            last_update TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+class Mission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    description = db.Column(db.String(200))
+    completed = db.Column(db.Boolean, default=False)
+    xp_reward = db.Column(db.Integer, default=0)
 
-init_db()
+class Achievement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    name = db.Column(db.String(100))
+    earned = db.Column(db.Boolean, default=False)
 
+# -------------------
+# UTILIDADES DATEX2
+# -------------------
 def fetch_datex2():
-    now = time.time()
-    if now - cache["timestamp"] < CACHE_TTL:
-        return cache["data"]
-
-    try:
-        resp = requests.get(DATEX2_URL, timeout=10)
-        resp.raise_for_status()
-        xml_text = resp.content
-        data = xmltodict.parse(xml_text)
-        cache["timestamp"] = now
-        cache["data"] = data
-        print("Datos descargados y parseados correctamente")
-        return data
-    except Exception as e:
-        print("Error descargando DATEX2:", e)
-        return None
+    resp = requests.get(DATEX2_URL, timeout=10)
+    resp.raise_for_status()
+    xml_text = resp.text
+    data = xmltodict.parse(xml_text)
+    return data
 
 def extract_balizas_from_datex2(data):
     balizas = []
     try:
-        situations = data.get("d2:payload", {}).get("sit:situation", [])
+        situations = data.get('d2:payload', {}).get('sit:situation', [])
         if isinstance(situations, dict):
             situations = [situations]
-        elif not situations:
-            situations = []
-
-        for situation in situations:
-            records = situation.get("sit:situationRecord", [])
+        for sit in situations:
+            records = sit.get('sit:situationRecord', [])
             if isinstance(records, dict):
                 records = [records]
-
             for rec in records:
-                loc_ref = rec.get("sit:locationReference", {})
-                tpeg = loc_ref.get("loc:tpegLinearLocation", {})
-                from_pt = tpeg.get("loc:from", {}).get("loc:pointCoordinates", {})
-                to_pt = tpeg.get("loc:to", {}).get("loc:pointCoordinates", {})
-
-                # Tomamos el punto "from" si existe
-                lat = from_pt.get("loc:latitude")
-                lng = from_pt.get("loc:longitude")
-
-                if lat is None or lng is None:
+                loc_ref = rec.get('sit:locationReference', {})
+                to_point = loc_ref.get('loc:tpegLinearLocation', {}).get('loc:to', {}).get('loc:pointCoordinates', {})
+                from_point = loc_ref.get('loc:tpegLinearLocation', {}).get('loc:from', {}).get('loc:pointCoordinates', {})
+                if to_point and 'loc:latitude' in to_point and 'loc:longitude' in to_point:
+                    lat = float(to_point['loc:latitude'])
+                    lng = float(to_point['loc:longitude'])
+                elif from_point and 'loc:latitude' in from_point and 'loc:longitude' in from_point:
+                    lat = float(from_point['loc:latitude'])
+                    lng = float(from_point['loc:longitude'])
+                else:
                     continue
-                try:
-                    lat = float(lat)
-                    lng = float(lng)
-                except:
-                    continue
-
-                # Nombre de la carretera o descripción
-                road = loc_ref.get("loc:supplementaryPositionalDescription", {}).get("loc:roadInformation", {}).get("loc:roadName", "Desconocida")
-
-                rec_id = rec.get("@id", situation.get("@id", "sin-id"))
-
+                municipality = to_point.get('loc:_tpegNonJunctionPointExtension', {}).get('loc:extendedTpegNonJunctionPoint', {}).get('lse:municipality', 'Desconocida')
                 balizas.append({
-                    "id": str(rec_id),
+                    "id": rec.get('@id', str(time.time())),
                     "lat": lat,
                     "lng": lng,
-                    "description": f"Incidencia en {road}"
+                    "municipality": municipality
                 })
-
     except Exception as e:
         print("Error extrayendo balizas:", e)
-
-    print(f"Balizas extraídas: {len(balizas)}")
     return balizas
+
+# -------------------
+# RUTAS
+# -------------------
 
 @app.route("/api/balizas")
 def api_balizas():
-    data = fetch_datex2()
-    if not data:
+    try:
+        data = fetch_datex2()
+        balizas = extract_balizas_from_datex2(data)
+        return jsonify(balizas)
+    except Exception as e:
+        print("Error en /api/balizas:", e)
         return jsonify({"error": "No se pudieron obtener balizas"}), 500
 
-    balizas = extract_balizas_from_datex2(data)
-    return jsonify(balizas)
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
-
-@app.route('/register', methods=['POST'])
+@app.route("/api/register", methods=["POST"])
 def register():
     data = request.json
-    username = data.get('username')
-    if not username:
-        return jsonify({"error": "No username provided"}), 400
+    username = data.get("username")
+    password = data.get("password")
+    if User.query.filter_by(username=username).first():
+        return jsonify({"error": "Usuario ya existe"}), 400
+    user = User(username=username, password=password)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({"message": "Usuario creado"}), 201
 
-    conn = sqlite3.connect('balizas.db')
-    c = conn.cursor()
-    try:
-        c.execute('INSERT INTO users (username, last_update) VALUES (?, ?)', (username, time.time()))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
-        return jsonify({"error": "Username already exists"}), 400
-
-    conn.close()
-    return jsonify({"message": f"User {username} registered successfully"}), 201
-
-@app.route('/updateProgress', methods=['POST'])
-def update_progress():
+@app.route("/api/login", methods=["POST"])
+def login():
     data = request.json
-    username = data.get('username')
-    xp = data.get('xp')
-    level = data.get('level')
+    username = data.get("username")
+    password = data.get("password")
+    user = User.query.filter_by(username=username, password=password).first()
+    if not user:
+        return jsonify({"error": "Usuario o contraseña incorrecta"}), 400
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "xp": user.xp,
+        "level": user.level
+    })
 
-    if not username or xp is None or level is None:
-        return jsonify({"error": "Missing fields"}), 400
+@app.route("/api/send_help", methods=["POST"])
+def send_help():
+    data = request.json
+    user_id = data.get("user_id")
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 400
+    user.xp += 20
+    if user.xp >= 100:
+        user.level += 1
+        user.xp -= 100
+    db.session.commit()
+    return jsonify({"xp": user.xp, "level": user.level})
 
-    conn = sqlite3.connect('balizas.db')
-    c = conn.cursor()
-    c.execute('UPDATE users SET xp = ?, level = ?, last_update = ? WHERE username = ?', (xp, level, time.time(), username))
-    conn.commit()
-    conn.close()
+@app.route("/api/ranking")
+def ranking():
+    users = User.query.order_by(User.xp.desc(), User.level.desc()).limit(10).all()
+    return jsonify([{"username": u.username, "xp": u.xp, "level": u.level} for u in users])
 
-    return jsonify({"message": "Progress updated successfully"})
-
-@app.route('/getRanking')
-def get_ranking():
-    conn = sqlite3.connect('balizas.db')
-    c = conn.cursor()
-    c.execute('SELECT username, xp, level FROM users ORDER BY level DESC, xp DESC LIMIT 10')
-    rows = c.fetchall()
-    conn.close()
-    ranking = [{"username": r[0], "xp": r[1], "level": r[2]} for r in rows]
-    return jsonify(ranking)
+# -------------------
+# INICIO
+# -------------------
+if __name__ == "__main__":
+    db.create_all()
+    app.run(host="0.0.0.0", port=5000, debug=True)
