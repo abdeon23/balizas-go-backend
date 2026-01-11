@@ -12,10 +12,11 @@ DATEX_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xm
 CACHE_SECONDS = 300
 
 NAMESPACES = {
-    "sit": "http://datex2.eu/schema/3/situation",
-    "loc": "http://datex2.eu/schema/3/location",
-    "com": "http://datex2.eu/schema/3/common",
-    "lse": "http://datex2.eu/schema/3/locationExtension"
+    "d2": "http://levelC/schema/3/d2Payload",
+    "sit": "http://levelC/schema/3/situation",
+    "loc": "http://levelC/schema/3/locationReferencing",
+    "com": "http://levelC/schema/3/common",
+    "lse": "http://levelC/schema/3/locationReferencingSpanishExtension"
 }
 
 # ---------------- APP ----------------
@@ -187,3 +188,4 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(host="0.0.0.0", port=5000, debug=True)
+
