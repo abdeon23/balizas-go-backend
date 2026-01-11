@@ -1,185 +1,159 @@
-import time
-import requests
-import xml.etree.ElementTree as ET
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from werkzeug.security import generate_password_hash, check_password_hash
+import requests
+import xml.etree.ElementTree as ET
+import time
 
-# ---------------- CONFIG ----------------
-
-DATEX_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
-CACHE_SECONDS = 300
-
-NAMESPACES = {
-    "d2": "http://levelC/schema/3/d2Payload",
-    "sit": "http://levelC/schema/3/situation",
-    "loc": "http://levelC/schema/3/locationReferencing",
-    "com": "http://levelC/schema/3/common",
-    "lse": "http://levelC/schema/3/locationReferencingSpanishExtension"
-}
-
-# ---------------- APP ----------------
-
+# ---------------------------
+# Configuración básica Flask
+# ---------------------------
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///game.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-CORS(app)
+CORS(app)  # Permite que el frontend en otra URL acceda
 
+# ---------------------------
+# Configuración SQLite
+# ---------------------------
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///game.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# ---------------- MODELS ----------------
-
+# ---------------------------
+# Modelos de base de datos
+# ---------------------------
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    points = db.Column(db.Integer, default=0)
-
-class Help(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer)
-    baliza_id = db.Column(db.String(50))
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(120), nullable=False)
+    score = db.Column(db.Integer, default=0)
 
 class Achievement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer)
-    name = db.Column(db.String(100))
+    name = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.String(200))
+    points = db.Column(db.Integer, default=10)
 
-# ---------------- INIT ----------------
+class Mission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200))
+    points = db.Column(db.Integer, default=5)
 
-with app.app_context():
-    db.create_all()
+class UserAchievement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    achievement_id = db.Column(db.Integer, db.ForeignKey('achievement.id'))
+    completed = db.Column(db.Boolean, default=False)
 
-# ---------------- DATEX CACHE ----------------
+# ---------------------------
+# Datos de balizas
+# ---------------------------
+DATEX_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
 
-_last_fetch = 0
-_cached_balizas = []
+balizas_cache = []
+last_fetch_time = 0
+FETCH_INTERVAL = 300  # cada 5 minutos
 
 def fetch_balizas():
-    global _last_fetch, _cached_balizas
+    global balizas_cache, last_fetch_time
+    now = time.time()
+    if now - last_fetch_time < FETCH_INTERVAL:
+        return balizas_cache
+    try:
+        r = requests.get(DATEX_URL, timeout=10)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        balizas = []
 
-    if time.time() - _last_fetch < CACHE_SECONDS:
-        return _cached_balizas
+        ns = {
+            'sit': 'http://levelC/schema/3/situation',
+            'loc': 'http://levelC/schema/3/locationReferencing',
+            'lse': 'http://levelC/schema/3/locationReferencingSpanishExtension',
+            'com': 'http://levelC/schema/3/common'
+        }
 
-    r = requests.get(DATEX_URL, timeout=15)
-    root = ET.fromstring(r.content)
+        for situation in root.findall('sit:situation', ns):
+            causeType = situation.find('.//sit:cause/sit:causeType', ns)
+            if causeType is not None and causeType.text == 'vehicleObstruction':
+                point = situation.find('.//loc:pointCoordinates', ns)
+                muni = situation.find('.//lse:municipality', ns)
+                if point is not None and muni is not None:
+                    lat = float(point.find('loc:latitude', ns).text)
+                    lon = float(point.find('loc:longitude', ns).text)
+                    balizas.append({
+                        'lat': lat,
+                        'lon': lon,
+                        'municipality': muni.text,
+                        'help_sent': False
+                    })
+        balizas_cache = balizas
+        last_fetch_time = now
+        print(f"Balizas extraídas: {len(balizas)}")
+        return balizas
+    except Exception as e:
+        print("Error al extraer balizas:", e)
+        return []
 
-    balizas = []
-
-    for situation in root.findall(".//sit:situation", NAMESPACES):
-
-        cause = situation.find(".//sit:causeType", NAMESPACES)
-        if cause is None or cause.text != "vehicleObstruction":
-            continue
-
-        lat = situation.find(".//loc:latitude", NAMESPACES)
-        lon = situation.find(".//loc:longitude", NAMESPACES)
-
-        if lat is None or lon is None:
-            continue
-
-        municipality = situation.find(".//lse:municipality", NAMESPACES)
-        road = situation.find(".//loc:roadName", NAMESPACES)
-
-        balizas.append({
-            "id": situation.attrib.get("id"),
-            "lat": float(lat.text),
-            "lon": float(lon.text),
-            "municipality": municipality.text if municipality is not None else "Desconocido",
-            "road": road.text if road is not None else ""
-        })
-
-    _cached_balizas = balizas
-    _last_fetch = time.time()
-    print(f"Balizas extraídas: {len(balizas)}")
-    return balizas
-
-# ---------------- ACHIEVEMENTS ----------------
-
-def check_achievements(user):
-    total = Help.query.filter_by(user_id=user.id).count()
-
-    achievements = {
-        1: "Primera ayuda",
-        5: "5 ayudas enviadas",
-        10: "10 ayudas enviadas",
-        25: "25 ayudas enviadas"
-    }
-
-    for qty, name in achievements.items():
-        if total >= qty:
-            exists = Achievement.query.filter_by(user_id=user.id, name=name).first()
-            if not exists:
-                db.session.add(Achievement(user_id=user.id, name=name))
-
-    db.session.commit()
-
-# ---------------- API ----------------
-
-@app.route("/api/balizas")
-def balizas():
+# ---------------------------
+# Rutas API
+# ---------------------------
+@app.route('/api/balizas')
+def api_balizas():
     return jsonify(fetch_balizas())
 
-@app.route("/api/register", methods=["POST"])
+@app.route('/api/register', methods=['POST'])
 def register():
-    data = request.json
-    if User.query.filter_by(username=data["username"]).first():
-        return jsonify({"error": "Usuario ya existe"}), 400
-
-    user = User(
-        username=data["username"],
-        password=generate_password_hash(data["password"])
-    )
+    data = request.get_json()
+    if not data.get('username') or not data.get('password'):
+        return jsonify({'error': 'Username y password obligatorios'}), 400
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'Usuario ya existe'}), 400
+    user = User(username=data['username'], password=data['password'])
     db.session.add(user)
     db.session.commit()
-    return jsonify({"ok": True})
+    return jsonify({'message': 'Usuario creado'})
 
-@app.route("/api/login", methods=["POST"])
+@app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
-    user = User.query.filter_by(username=data["username"]).first()
-    if not user or not check_password_hash(user.password, data["password"]):
-        return jsonify({"error": "Credenciales incorrectas"}), 401
+    data = request.get_json()
+    user = User.query.filter_by(username=data.get('username')).first()
+    if not user or user.password != data.get('password'):
+        return jsonify({'error': 'Usuario o password incorrectos'}), 401
+    return jsonify({'message': 'Login correcto', 'user_id': user.id})
 
-    return jsonify({"user_id": user.id, "points": user.points})
+@app.route('/api/ranking')
+def ranking():
+    users = User.query.order_by(User.score.desc()).all()
+    result = [{'username': u.username, 'score': u.score} for u in users]
+    return jsonify(result)
 
-@app.route("/api/help", methods=["POST"])
-def send_help():
-    data = request.json
-    user = User.query.get(data["user_id"])
+@app.route('/api/achievements')
+def achievements():
+    achs = Achievement.query.all()
+    result = [{'id': a.id, 'name': a.name, 'description': a.description, 'points': a.points} for a in achs]
+    return jsonify(result)
 
-    if not user:
-        return jsonify({"error": "Usuario no válido"}), 400
+@app.route('/api/missions')
+def missions():
+    missions_list = Mission.query.all()
+    result = [{'id': m.id, 'description': m.description, 'points': m.points} for m in missions_list]
+    return jsonify(result)
 
-    already = Help.query.filter_by(
-        user_id=user.id,
-        baliza_id=data["baliza_id"]
-    ).first()
-
-    if already:
-        return jsonify({"error": "Ya ayudaste"}), 400
-
-    db.session.add(Help(user_id=user.id, baliza_id=data["baliza_id"]))
-    user.points += 10
+# ---------------------------
+# Inicializar DB con logros y misiones
+# ---------------------------
+@app.before_first_request
+def setup_db():
+    db.create_all()
+    if Achievement.query.count() == 0:
+        # 10 logros de ejemplo
+        for i in range(1, 11):
+            db.session.add(Achievement(name=f"Logro {i}", description=f"Descripción del logro {i}", points=i*10))
+    if Mission.query.count() == 0:
+        # 5 misiones de ejemplo
+        for i in range(1, 6):
+            db.session.add(Mission(description=f"Misión {i}", points=i*5))
     db.session.commit()
 
-    check_achievements(user)
-
-    return jsonify({"ok": True, "points": user.points})
-
-@app.route("/api/ranking")
-def ranking():
-    users = User.query.order_by(User.points.desc()).limit(20)
-    return jsonify([
-        {"username": u.username, "points": u.points}
-        for u in users
-    ])
-
-@app.route("/api/achievements/<int:user_id>")
-def achievements(user_id):
-    ach = Achievement.query.filter_by(user_id=user_id)
-    return jsonify([a.name for a in ach])
 
 # ---------------- RUN ----------------
 
@@ -188,4 +162,5 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(host="0.0.0.0", port=5000, debug=True)
+
 
