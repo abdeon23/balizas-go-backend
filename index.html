@@ -6,10 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <style>
     html, body {
@@ -21,349 +18,173 @@
       color: #f9fafb;
       overflow: hidden;
     }
-
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    header {
-      padding: 8px 14px;
-      background: linear-gradient(90deg, #0f172a, #111827);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-    }
-
-    .logo {
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      font-size: 1rem;
-      color: #38bdf8;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .logo-badge {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #f97316, #be123c);
-      box-shadow: 0 0 12px rgba(248, 113, 113, 0.8);
-    }
-
-    .scoreboard {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      font-size: 0.8rem;
-    }
-
-    .badge {
-      background: rgba(15, 23, 42, 0.9);
-      border-radius: 999px;
-      padding: 4px 10px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid rgba(55, 65, 81, 0.9);
-    }
-
-    .badge span.value {
-      font-weight: 700;
-      color: #facc15;
-      margin-right: 4px;
-    }
-
-    #main {
-      display: grid;
-      grid-template-columns: minmax(0, 3fr) minmax(260px, 320px);
-      flex: 1;
-      min-height: 0;
-    }
-
-    #map {
-      height: 100%;
-      width: 100%;
-    }
-
-    #side-panel {
-      background: #020617;
-      border-left: 1px solid rgba(30, 64, 175, 0.6);
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .panel-section {
-      background: rgba(15, 23, 42, 0.95);
-      border-radius: 10px;
-      padding: 8px 10px;
-      border: 1px solid rgba(55, 65, 81, 0.9);
-      font-size: 0.8rem;
-    }
-
-    .panel-section h3 {
-      margin-top: 0;
-      font-size: 0.9rem;
-      margin-bottom: 4px;
-    }
-
-    .ad-banner {
-      background: radial-gradient(circle, #facc15 0, #f97316 30%, #9f1239 80%);
-      border-radius: 10px;
-      padding: 8px 10px;
-      color: #111827;
-      cursor: pointer;
-      font-size: 0.8rem;
-    }
-
-    .toast {
-      position: fixed;
-      top: 70px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(34, 197, 94, 0.95);
-      padding: 7px 14px;
-      border-radius: 999px;
-      opacity: 0;
-      transition: opacity 0.25s ease-out;
-      z-index: 2000;
-      font-size: 0.8rem;
-    }
-
-    .toast.show {
-      opacity: 1;
-    }
-
-    @media (max-width: 800px) {
-      #main {
-        grid-template-columns: 1fr;
-        grid-template-rows: 2fr auto;
-      }
-      #side-panel {
-        height: 260px;
-      }
-    }
+    #app { display: flex; flex-direction: column; height: 100%; }
+    header { padding:8px 14px; background: linear-gradient(90deg,#0f172a,#111827); display:flex; align-items:center; justify-content:space-between; box-shadow:0 3px 10px rgba(0,0,0,.5); z-index:1000; }
+    .logo { font-weight:800; letter-spacing:.1em; font-size:1rem; color:#38bdf8; display:flex; align-items:center; gap:6px; }
+    .logo-badge { width:18px; height:18px; border-radius:50%; background: radial-gradient(circle,#f97316,#be123c); box-shadow:0 0 12px rgba(248,113,113,.8); }
+    .scoreboard { display:flex; gap:10px; align-items:center; font-size:.8rem; }
+    .badge { background: rgba(15,23,42,.9); border-radius:999px; padding:4px 10px; display:inline-flex; align-items:center; gap:6px; border:1px solid rgba(55,65,81,.9); }
+    .badge span.value { font-weight:700; color:#facc15; margin-right:4px; }
+    .btn { display:none; } /* ocultamos reset */
+    #main { display:grid; grid-template-columns:minmax(0,3fr) minmax(260px,320px); flex:1; min-height:0; }
+    #map { height:100%; width:100%; }
+    #side-panel { background:#020617; border-left:1px solid rgba(30,64,175,.6); padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .panel-section { background: rgba(15,23,42,.95); border-radius:10px; padding:8px 10px; border:1px solid rgba(55,65,81,.9); font-size:.8rem; }
+    .panel-section h3 { margin-top:0; font-size:.9rem; margin-bottom:4px; }
+    .ad-banner { background: radial-gradient(circle,#facc15 0,#f97316 30%,#9f1239 80%); border-radius:10px; padding:8px 10px; color:#111827; cursor:pointer; font-size:.8rem; }
+    .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: rgba(34,197,94,.95); padding:7px 14px; border-radius:999px; opacity:0; transition: opacity .25s ease-out; z-index:2000; font-size:.8rem; }
+    .toast.show { opacity:1; }
+    @media(max-width:800px){#main{grid-template-columns:1fr;grid-template-rows:2fr auto;}#side-panel{height:260px;}}
   </style>
 </head>
 
 <body>
-  <div id="app">
-    <header>
-      <div class="logo">
-        <div class="logo-badge"></div>
-        BALIZAS GO – DATEX2
-      </div>
-
-      <div class="scoreboard">
-        <div class="badge"><span class="value" id="level">1</span> Nivel</div>
-        <div class="badge"><span class="value" id="xp">0/100</span> XP</div>
-        <div class="badge"><span class="value" id="helps">10</span> Ayudas</div>
-      </div>
-    </header>
-
-    <div id="main">
-      <div id="map"></div>
-
-      <aside id="side-panel">
-        <section class="panel-section">
-          <h3>Misiones (concepto)</h3>
-          <ul style="margin:0;padding-left:16px;">
-            <li>Ayuda a varias balizas.</li>
-            <li>Deja el mapa limpio (sin pendientes).</li>
-          </ul>
-          <p style="margin-top:6px;" id="missions-info">
-            Misiones disponibles: 10 logros pendientes
-          </p>
-        </section>
-
-        <section class="panel-section">
-          <h3>Anuncio (+Ayudas)</h3>
-          <div class="ad-banner" id="ad-banner">
-            Pulsa aquí para "ver un anuncio" y obtener <strong>+3 ayudas</strong> extra.
-          </div>
-        </section>
-
-        <section class="panel-section">
-          <h3>Estado del mapa</h3>
-          <p id="map-status">Cargando balizas…</p>
-        </section>
-      </aside>
+<div id="app">
+  <header>
+    <div class="logo"><div class="logo-badge"></div>BALIZAS GO – DATEX2</div>
+    <div class="scoreboard">
+      <div class="badge"><span class="value" id="level">1</span> Nivel</div>
+      <div class="badge"><span class="value" id="xp">0/100</span> XP</div>
+      <div class="badge"><span class="value" id="helps">10</span> Ayudas</div>
     </div>
+  </header>
+
+  <div id="main">
+    <div id="map"></div>
+    <aside id="side-panel">
+      <section class="panel-section">
+        <h3>Misiones (concepto)</h3>
+        <ul style="margin:0;padding-left:16px;">
+          <li>Ayuda a varias balizas.</li>
+          <li>Deja el mapa limpio (sin pendientes).</li>
+        </ul>
+      </section>
+      <section class="panel-section">
+        <h3>Anuncio (+Ayudas)</h3>
+        <div class="ad-banner" id="ad-banner">Pulsa aquí para "ver un anuncio" y obtener <strong>+3 ayudas</strong> extra.</div>
+      </section>
+      <section class="panel-section">
+        <h3>Estado del mapa</h3>
+        <p id="map-status">Cargando balizas…</p>
+      </section>
+    </aside>
   </div>
+</div>
 
-  <div class="toast" id="toast"></div>
+<div class="toast" id="toast"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <script>
-    let beacons = [];
-    let beaconMarkers = new Map();
-    let username = prompt("Introduce tu nombre de jugador:");
+<script>
+let beacons = [];
+let beaconMarkers = new Map();
+let username = prompt("Introduce tu nombre de jugador:");
 
-    let xp = 0;
-    let level = 1;
-    let xpToNext = 100;
-    let helps = 10;
-    let pendingHelps = 0;
+let xp = 0, level = 1, xpToNext = 100, helps = 10;
+const xpEl = document.getElementById("xp");
+const levelEl = document.getElementById("level");
+const helpsEl = document.getElementById("helps");
+const mapStatusEl = document.getElementById("map-status");
+const toastEl = document.getElementById("toast");
+const adBannerEl = document.getElementById("ad-banner");
 
-    const xpEl = document.getElementById("xp");
-    const levelEl = document.getElementById("level");
-    const helpsEl = document.getElementById("helps");
-    const mapStatusEl = document.getElementById("map-status");
-    const toastEl = document.getElementById("toast");
-    const adBannerEl = document.getElementById("ad-banner");
+const map = L.map("map").setView([40.4, -3.7], 6);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
 
-    const map = L.map("map").setView([40.4, -3.7], 6);
+// iconos usando imagen del repositorio (cambia URL por la real)
+const iconNeedsHelp = L.icon({
+  iconUrl: "https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",
+  iconSize: [32,32],
+  iconAnchor: [16,16]
+});
+const iconHelped = L.icon({
+  iconUrl: "https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",
+  className: "helped", // luego puedes poner filtro CSS
+  iconSize: [32,32],
+  iconAnchor: [16,16]
+});
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-    }).addTo(map);
+// filtro CSS para diferenciar rojo/verde
+const style = document.createElement('style');
+style.innerHTML = `
+  .leaflet-marker-icon.helped { filter: hue-rotate(100deg) saturate(200%); }
+`;
+document.head.appendChild(style);
 
-    const createBeaconIcon = (color) => L.icon({
-      iconUrl: "https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",
-      iconSize: [30, 30],
-      className: color === "red" ? "icon-red" : "icon-green",
-    });
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  setTimeout(()=>toastEl.classList.remove("show"),1500);
+}
 
-    function showToast(msg) {
-      toastEl.textContent = msg;
-      toastEl.classList.add("show");
-      setTimeout(() => toastEl.classList.remove("show"), 1500);
-    }
+async function loadBeaconsFromAPI(){
+  try {
+    const res = await fetch("https://balizas-go-backend-production.up.railway.app/api/balizas");
+    const data = await res.json();
 
-    async function loadBeaconsFromAPI() {
-      try {
-        const res = await fetch("https://balizas-go-backend-production.up.railway.app/api/balizas");
-        const data = await res.json();
-
-        beacons = data
-        .filter(item => !isNaN(parseFloat(item.lat)) && !isNaN(parseFloat(item.lng)))
-        .map((item, i) => ({
+    beacons = data
+      .filter(item => !isNaN(parseFloat(item.lat)) && !isNaN(parseFloat(item.lng)))
+      .map((item,i)=>({
         id: item.id || `b${i}`,
         lat: parseFloat(item.lat),
         lng: parseFloat(item.lng),
         name: "Baliza DATEX2",
-        description: `${item.municipality || ""} (km ${item.km || "?"})`,
-        needsHelp: true,
-        }));
+        description: item.municipality ? `Localidad: ${item.municipality}` : "Origen: DATEX2",
+        needsHelp: true
+      }));
+    console.log("Balizas cargadas:", beacons);
+  } catch(e){
+    console.error("Error cargando balizas:", e);
+  }
+}
 
-        console.log("Balizas cargadas:", beacons);
-      } catch (e) {
-        console.error("Error cargando balizas:", e);
-        beacons = [];
-      }
-    }
+function updateUI(){
+  const pendingHelps = beacons.filter(b=>b.needsHelp).length;
+  xpEl.textContent = `${xp}/${xpToNext}`;
+  levelEl.textContent = level;
+  helpsEl.textContent = helps;
+  mapStatusEl.textContent = `${pendingHelps} balizas necesitan ayuda`;
+}
 
-    async function registerUser() {
-      await fetch("https://balizas-go-backend-production.up.railway.app/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username })
-      }).catch(() => {});
-    }
+function addXP(amount){
+  xp += amount;
+  if(xp>=xpToNext){ level++; xp=0; xpToNext=Math.round(xpToNext*1.4+50); showToast("¡Subes de nivel!"); }
+  updateUI();
+}
 
-    async function updateServerProgress() {
-      await fetch("https://balizas-go-backend-production.up.railway.app/updateProgress", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, xp, level })
-      });
-    }
+function handleSendHelp(b){
+  if(!b.needsHelp){ showToast("Baliza ya ayudada"); return; }
+  if(helps<=0){ showToast("No te quedan ayudas"); return; }
+  helps--; b.needsHelp=false;
 
-    registerUser();
+  const marker = beaconMarkers.get(b.id);
+  if(marker) marker.setIcon(iconHelped);
 
-    async function loadRanking() {
-      const res = await fetch("https://balizas-go-backend-production.up.railway.app/getRanking");
-      const ranking = await res.json();
-      console.log("Ranking:", ranking);
-    }
+  addXP(20);
+  showToast("Ayuda enviada (+20 XP)");
+  updateUI();
+}
 
-    function updateUI() {
-      xpEl.textContent = `${xp}/${xpToNext}`;
-      levelEl.textContent = level;
-      helpsEl.textContent = helps;
-      pendingHelps = beacons.filter(b => b.needsHelp).length;
-      mapStatusEl.textContent = `${pendingHelps} balizas necesitan ayuda`;
-    }
+function initMap(){
+  beacons.forEach(b=>{
+    const marker = L.marker([b.lat,b.lng], { icon: b.needsHelp ? iconNeedsHelp : iconHelped }).addTo(map);
+    marker.bindPopup(`<strong>${b.name}</strong><br>${b.description}<br><em>Pulsa para ayudar</em>`);
+    marker.on("click", ()=>handleSendHelp(b));
+    beaconMarkers.set(b.id, marker);
+  });
+  const group = new L.featureGroup(Array.from(beaconMarkers.values()));
+  map.fitBounds(group.getBounds().pad(0.2));
+  updateUI();
+}
 
-    function addXP(amount) {
-      xp += amount;
-      if (xp >= xpToNext) {
-        level++;
-        xp = 0;
-        xpToNext = Math.round(xpToNext * 1.4 + 50);
-        showToast("¡Subes de nivel!");
-      }
-      updateUI();
-    }
+adBannerEl.addEventListener("click", ()=>{
+  helps+=3;
+  showToast("Has visto un anuncio (simulado): +3 ayudas");
+  updateUI();
+});
 
-    function handleSendHelp(beacon) {
-      if (!beacon.needsHelp) {
-        showToast("Esta baliza ya está ayudada");
-        return;
-      }
-      if (helps <= 0) {
-        showToast("No te quedan ayudas. Usa el anuncio para recargar.");
-        return;
-      }
-
-      helps--;
-      beacon.needsHelp = false;
-
-      const marker = beaconMarkers.get(beacon.id);
-      if (marker) {
-        marker.setIcon(createBeaconIcon("green"));
-      }
-
-      addXP(20);
-      showToast(`Baliza en apuros en ${beacon.description} - Ayuda enviada`);
-      updateUI();
-
-      if (pendingHelps === 0) {
-        addXP(80);
-        showToast("¡Mapa limpio! Bonus +80 XP");
-      }
-
-      updateServerProgress();
-    }
-
-    function initMap() {
-      beacons.forEach(b => {
-        const marker = L.marker([b.lat, b.lng], {
-          icon: createBeaconIcon(b.needsHelp ? "red" : "green"),
-        }).addTo(map);
-
-        marker.bindPopup(
-          `<strong>${b.name}</strong><br>${b.description}<br><br><em>Pulsa para ayudar</em>`
-        );
-
-        marker.on("click", () => handleSendHelp(b));
-        beaconMarkers.set(b.id, marker);
-      });
-
-      const group = new L.featureGroup(Array.from(beaconMarkers.values()));
-      map.fitBounds(group.getBounds().pad(0.2));
-      updateUI();
-    }
-
-    adBannerEl.addEventListener("click", () => {
-      helps += 3;
-      showToast("Has visto un anuncio (simulado): +3 ayudas");
-      updateUI();
-    });
-
-    loadBeaconsFromAPI().then(() => {
-      initMap();
-      loadRanking();
-    });
-  </script>
+loadBeaconsFromAPI().then(initMap);
+</script>
 </body>
 </html>
