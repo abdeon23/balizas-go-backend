@@ -166,8 +166,9 @@ def setup_db():
 
 
 if __name__ == "__main__":
-    setup_db()  # Esto reemplaza before_first_request
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    with app.app_context():  # Esto proporciona el contexto necesario
+        setup_db()           # Crea la base de datos, logros y misiones
+    app.run(host="0.0.0.0", port=5000)
 
 
 
