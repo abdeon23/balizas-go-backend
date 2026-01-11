@@ -103,7 +103,7 @@
 
     async function loadBeaconsFromAPI(){
       try{
-        const res = await fetch("https://balizas-go-backend-production.up.railway.app/api/balizas");
+        const res = await fetch("/api/balizas");
         const data = await res.json();
         beacons = data.filter(item=>item.lat&&!isNaN(item.lat)&&item.lng&&!isNaN(item.lng)).map((item,i)=>({
           id: item.id||`b${i}`,
