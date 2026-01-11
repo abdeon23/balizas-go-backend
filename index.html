@@ -23,6 +23,7 @@
     .toast { position:fixed; top:70px; left:50%; transform:translateX(-50%); background:rgba(34,197,94,0.95); padding:7px 14px; border-radius:999px; opacity:0; transition:opacity 0.25s ease-out; z-index:2000; font-size:0.8rem; }
     .toast.show { opacity:1; }
     .leaflet-marker-icon.helped { filter: hue-rotate(100deg) saturate(200%); }
+    .icon-helped img { filter: hue-rotate(120deg) brightness(1.2); } /* verde */
     @media (max-width: 800px) { #main { grid-template-columns:1fr; grid-template-rows:2fr auto; } #side-panel { height:260px; } }
   </style>
 </head>
@@ -80,8 +81,20 @@
     const map = L.map("map").setView([40.4,-3.7],6);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
 
-    const iconNeedsHelp = L.icon({iconUrl:"https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",iconSize:[32,32],iconAnchor:[16,16]});
-    const iconHelped = L.icon({iconUrl:"https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",className:"helped",iconSize:[32,32],iconAnchor:[16,16]});
+    const iconNeedsHelp = L.icon({
+    iconUrl: "https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",
+    iconSize: [32, 32], // tamaño en píxeles
+    iconAnchor: [16, 16], // centro del icono
+    popupAnchor: [0, -16], // dónde aparece el popup
+    });
+
+    const iconHelped = L.icon({
+    iconUrl: "https://raw.githubusercontent.com/abdeon23/balizas-go-backend/main/baliza.png",
+    className: "icon-helped", // podemos usar CSS para filtro verde
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
+    });
 
     function showToast(msg){toastEl.textContent=msg; toastEl.classList.add("show"); setTimeout(()=>toastEl.classList.remove("show"),1500);}
     function updateUI(){xpEl.textContent=`${xp}/${xpToNext}`; levelEl.textContent=level; helpsEl.textContent=helps; pendingHelps=beacons.filter(b=>b.needsHelp).length; mapStatusEl.textContent=`${pendingHelps} balizas necesitan ayuda`;}
