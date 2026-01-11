@@ -11,7 +11,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///balizas.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-DATEX2_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/incidencias.xml"
+DATEX2_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
 
 # -------------------
 # MODELOS DE DATOS
