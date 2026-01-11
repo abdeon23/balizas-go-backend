@@ -1,151 +1,367 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Balizas Game</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>Balizas GO – DATEX2 + Ayuda</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
 
-<style>
-  body { margin: 0; font-family: Arial, sans-serif; }
-  #map { height: 80vh; width: 100%; }
-  #panel { padding: 10px; height: 20vh; overflow-y: auto; background: #f4f4f4; }
-  .popup-btn { margin-top: 5px; padding: 3px 6px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 3px; }
-  .popup-btn:disabled { background: #aaa; cursor: not-allowed; }
-  #loginModal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); justify-content:center; align-items:center; }
-  #loginModalContent { background:white; padding:20px; border-radius:5px; width:300px; }
-</style>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, sans-serif;
+      background: radial-gradient(circle at top, #1f2937 0, #020617 60%);
+      color: #f9fafb;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    header {
+      padding: 8px 14px;
+      background: linear-gradient(90deg, #0f172a, #111827);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+
+    .logo {
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      font-size: 1rem;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .logo-badge {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #f97316, #be123c);
+      box-shadow: 0 0 12px rgba(248, 113, 113, 0.8);
+    }
+
+    .scoreboard {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.8rem;
+    }
+
+    .badge {
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 999px;
+      padding: 4px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+    }
+
+    .badge span.value {
+      font-weight: 700;
+      color: #facc15;
+      margin-right: 4px;
+    }
+
+    #main {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(260px, 320px);
+      flex: 1;
+      min-height: 0;
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+
+    #side-panel {
+      background: #020617;
+      border-left: 1px solid rgba(30, 64, 175, 0.6);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel-section {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 10px;
+      padding: 8px 10px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      font-size: 0.8rem;
+    }
+
+    .panel-section h3 {
+      margin-top: 0;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+
+    .ad-banner {
+      background: radial-gradient(circle, #facc15 0, #f97316 30%, #9f1239 80%);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #111827;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .toast {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(34, 197, 94, 0.95);
+      padding: 7px 14px;
+      border-radius: 999px;
+      opacity: 0;
+      transition: opacity 0.25s ease-out;
+      z-index: 2000;
+      font-size: 0.8rem;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+
+    @media (max-width: 800px) {
+      #main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 2fr auto;
+      }
+      #side-panel {
+        height: 260px;
+      }
+    }
+  </style>
 </head>
+
 <body>
+  <div id="app">
+    <header>
+      <div class="logo">
+        <div class="logo-badge"></div>
+        BALIZAS GO – DATEX2
+      </div>
 
-<div id="map"></div>
-<div id="panel">
-  <h3>Ranking</h3>
-  <ul id="ranking"></ul>
-  <h3>Logros pendientes</h3>
-  <ul id="achievements"></ul>
-</div>
+      <div class="scoreboard">
+        <div class="badge"><span class="value" id="level">1</span> Nivel</div>
+        <div class="badge"><span class="value" id="xp">0/100</span> XP</div>
+        <div class="badge"><span class="value" id="helps">10</span> Ayudas</div>
+      </div>
+    </header>
 
-<!-- Login modal -->
-<div id="loginModal">
-  <div id="loginModalContent">
-    <h3>Iniciar sesión / Registrarse</h3>
-    <input type="text" id="username" placeholder="Usuario" /><br><br>
-    <input type="password" id="password" placeholder="Contraseña" /><br><br>
-    <button id="loginBtn">Entrar</button>
-    <button id="registerBtn">Registrarse</button>
+    <div id="main">
+      <div id="map"></div>
+
+      <aside id="side-panel">
+        <section class="panel-section">
+          <h3>Misiones (concepto)</h3>
+          <ul style="margin:0;padding-left:16px;">
+            <li>Ayuda a varias balizas.</li>
+            <li>Deja el mapa limpio (sin pendientes).</li>
+          </ul>
+          <p style="margin-top:6px;" id="missions-info">
+            Misiones disponibles: 10 logros pendientes
+          </p>
+        </section>
+
+        <section class="panel-section">
+          <h3>Anuncio (+Ayudas)</h3>
+          <div class="ad-banner" id="ad-banner">
+            Pulsa aquí para "ver un anuncio" y obtener <strong>+3 ayudas</strong> extra.
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <h3>Estado del mapa</h3>
+          <p id="map-status">Cargando balizas…</p>
+        </section>
+      </aside>
+    </div>
   </div>
-</div>
 
-<script>
-let map = L.map('map').setView([40.4168, -3.7038], 6); // Centro de España
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(map);
+  <div class="toast" id="toast"></div>
 
-let balizas = [];
-let currentUser = null;
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-// Icono divertido
-let balizaIcon = L.icon({
-  iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
-  iconSize: [35, 35],
-});
+  <script>
+    let beacons = [];
+    let beaconMarkers = new Map();
+    let username = prompt("Introduce tu nombre de jugador:");
 
-// Logros iniciales
-let achievementsList = [
-  "Primera baliza ayudada", "Ayuda exprés", "3 balizas en un día",
-  "5 balizas consecutivas", "Usuario solidario", "Maratón de balizas",
-  "Top 10", "Explorador de rutas", "Ayuda en todas las provincias", "Baliza legendaria"
-];
+    let xp = 0;
+    let level = 1;
+    let xpToNext = 100;
+    let helps = 10;
+    let pendingHelps = 0;
 
-function showAchievements() {
-  let ul = document.getElementById('achievements');
-  ul.innerHTML = '';
-  achievementsList.forEach(a => {
-    let li = document.createElement('li');
-    li.textContent = a;
-    ul.appendChild(li);
-  });
-}
+    const xpEl = document.getElementById("xp");
+    const levelEl = document.getElementById("level");
+    const helpsEl = document.getElementById("helps");
+    const mapStatusEl = document.getElementById("map-status");
+    const toastEl = document.getElementById("toast");
+    const adBannerEl = document.getElementById("ad-banner");
 
-function showRanking() {
-  let ul = document.getElementById('ranking');
-  ul.innerHTML = '';
-  fetch('/api/ranking')
-    .then(r => r.json())
-    .then(data => {
-      data.forEach(u => {
-        let li = document.createElement('li');
-        li.textContent = `${u.username}: ${u.score} balizas`;
-        ul.appendChild(li);
+    const map = L.map("map").setView([40.4, -3.7], 6);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+    }).addTo(map);
+
+    const createBeaconIcon = (color) => L.icon({
+      iconUrl: "baliza.png",
+      iconSize: [30, 30],
+      className: color === "red" ? "icon-red" : "icon-green",
+    });
+
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      setTimeout(() => toastEl.classList.remove("show"), 1500);
+    }
+
+    async function loadBeaconsFromAPI() {
+      try {
+        const res = await fetch("https://balizas-go-backend-production.up.railway.app/api/balizas");
+        const data = await res.json();
+
+        beacons = data.map((item, i) => ({
+          id: item.id || `b${i}`,
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lng),
+          name: "Baliza DATEX2",
+          description: `${item.municipality || ""} (km ${item.km || "?"})`,
+          needsHelp: true,
+        }));
+
+        console.log("Balizas cargadas:", beacons);
+      } catch (e) {
+        console.error("Error cargando balizas:", e);
+        beacons = [];
+      }
+    }
+
+    async function registerUser() {
+      await fetch("https://balizas-go-backend-production.up.railway.app/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username })
+      }).catch(() => {});
+    }
+
+    async function updateServerProgress() {
+      await fetch("https://balizas-go-backend-production.up.railway.app/updateProgress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, xp, level })
       });
-    })
-    .catch(e => console.log('No se pudo cargar ranking', e));
-}
+    }
 
-// Cargar balizas desde backend
-function loadBalizas() {
-  fetch('/api/balizas')
-    .then(r => r.json())
-    .then(data => {
-      balizas = data.map(b => ({...b, ayuda_enviada: false}));
-      balizas.forEach(b => {
-        let marker = L.marker([b.latitude, b.longitude], {icon: balizaIcon}).addTo(map);
-        marker.bindPopup(getPopupContent(b));
-        b.marker = marker;
+    registerUser();
+
+    async function loadRanking() {
+      const res = await fetch("https://balizas-go-backend-production.up.railway.app/getRanking");
+      const ranking = await res.json();
+      console.log("Ranking:", ranking);
+    }
+
+    function updateUI() {
+      xpEl.textContent = `${xp}/${xpToNext}`;
+      levelEl.textContent = level;
+      helpsEl.textContent = helps;
+      pendingHelps = beacons.filter(b => b.needsHelp).length;
+      mapStatusEl.textContent = `${pendingHelps} balizas necesitan ayuda`;
+    }
+
+    function addXP(amount) {
+      xp += amount;
+      if (xp >= xpToNext) {
+        level++;
+        xp = 0;
+        xpToNext = Math.round(xpToNext * 1.4 + 50);
+        showToast("¡Subes de nivel!");
+      }
+      updateUI();
+    }
+
+    function handleSendHelp(beacon) {
+      if (!beacon.needsHelp) {
+        showToast("Esta baliza ya está ayudada");
+        return;
+      }
+      if (helps <= 0) {
+        showToast("No te quedan ayudas. Usa el anuncio para recargar.");
+        return;
+      }
+
+      helps--;
+      beacon.needsHelp = false;
+
+      const marker = beaconMarkers.get(beacon.id);
+      if (marker) {
+        marker.setIcon(createBeaconIcon("green"));
+      }
+
+      addXP(20);
+      showToast(`Baliza en apuros en ${beacon.description} - Ayuda enviada`);
+      updateUI();
+
+      if (pendingHelps === 0) {
+        addXP(80);
+        showToast("¡Mapa limpio! Bonus +80 XP");
+      }
+
+      updateServerProgress();
+    }
+
+    function initMap() {
+      beacons.forEach(b => {
+        const marker = L.marker([b.lat, b.lng], {
+          icon: createBeaconIcon(b.needsHelp ? "red" : "green"),
+        }).addTo(map);
+
+        marker.bindPopup(
+          `<strong>${b.name}</strong><br>${b.description}<br><br><em>Pulsa para ayudar</em>`
+        );
+
+        marker.on("click", () => handleSendHelp(b));
+        beaconMarkers.set(b.id, marker);
       });
-    })
-    .catch(e => console.log('Error cargando balizas', e));
-}
 
-function getPopupContent(baliza) {
-  let sent = baliza.ayuda_enviada;
-  let btnText = sent ? "Ayuda enviada" : "Enviar ayuda";
-  let btnDisabled = sent ? "disabled" : "";
-  return `<b>Baliza en apuros</b><br>${baliza.locality}<br>
-    <button class="popup-btn" ${btnDisabled} onclick="sendHelp('${baliza.id}')">${btnText}</button>`;
-}
+      const group = new L.featureGroup(Array.from(beaconMarkers.values()));
+      map.fitBounds(group.getBounds().pad(0.2));
+      updateUI();
+    }
 
-function sendHelp(id) {
-  if (!currentUser) { document.getElementById('loginModal').style.display = 'flex'; return; }
-  fetch(`/api/help/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user: currentUser})})
-    .then(r => r.json())
-    .then(res => {
-      let b = balizas.find(x => x.id === id);
-      b.ayuda_enviada = true;
-      b.marker.setPopupContent(getPopupContent(b));
-      showRanking();
+    adBannerEl.addEventListener("click", () => {
+      helps += 3;
+      showToast("Has visto un anuncio (simulado): +3 ayudas");
+      updateUI();
     });
-}
 
-// Login / Registro
-document.getElementById('loginBtn').onclick = () => {
-  let u = document.getElementById('username').value;
-  let p = document.getElementById('password').value;
-  fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p})})
-    .then(r=>r.json()).then(res=>{
-      if(res.success){currentUser=u; document.getElementById('loginModal').style.display='none'; showRanking();}
-      else alert('Error login');
+    loadBeaconsFromAPI().then(() => {
+      initMap();
+      loadRanking();
     });
-};
-
-document.getElementById('registerBtn').onclick = () => {
-  let u = document.getElementById('username').value;
-  let p = document.getElementById('password').value;
-  fetch('/api/register', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p})})
-    .then(r=>r.json()).then(res=>{
-      if(res.success){currentUser=u; document.getElementById('loginModal').style.display='none'; showRanking();}
-      else alert('Error registro');
-    });
-};
-
-// Inicializamos
-showAchievements();
-showRanking();
-loadBalizas();
-</script>
-
+  </script>
 </body>
 </html>
