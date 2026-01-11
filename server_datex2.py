@@ -6,82 +6,113 @@ import xmltodict
 import time
 
 app = Flask(__name__)
-CORS(app)  # Permite llamadas desde cualquier origen
+CORS(app)
+
+# --- Database setup ---
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///balizas.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-DATEX2_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
-
-# -------------------
-# MODELOS DE DATOS
-# -------------------
+# --- Models ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True)
-    password = db.Column(db.String(50))  # simple para demo
+    password = db.Column(db.String(50))
     xp = db.Column(db.Integer, default=0)
     level = db.Column(db.Integer, default=1)
 
-class Mission(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    description = db.Column(db.String(200))
-    completed = db.Column(db.Boolean, default=False)
-    xp_reward = db.Column(db.Integer, default=0)
+# --- Globals ---
+DATEX2_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v36.xml"
 
-class Achievement(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    name = db.Column(db.String(100))
-    earned = db.Column(db.Boolean, default=False)
-
-# -------------------
-# UTILIDADES DATEX2
-# -------------------
+# --- DATEX2 Parsing ---
 def fetch_datex2():
-    resp = requests.get(DATEX2_URL, timeout=10)
+    """Descarga XML DATEX2 v3.6 y lo convierte a dict Python."""
+    resp = requests.get(DATEX2_URL, timeout=12)
     resp.raise_for_status()
     xml_text = resp.text
     data = xmltodict.parse(xml_text)
     return data
 
 def extract_balizas_from_datex2(data):
+    """
+    Extrae solo eventos con <sit:causeType>vehicleObstruction</sit:causeType>.
+    Devuelve lista de balizas {id, lat, lng, municipality}.
+    """
     balizas = []
     try:
-        situations = data.get('d2:payload', {}).get('sit:situation', [])
+        situations = data.get("d2LogicalModel", {}) \
+                         .get("payloadPublication", {}) \
+                         .get("situation", [])
+
         if isinstance(situations, dict):
             situations = [situations]
-        for sit in situations:
-            records = sit.get('sit:situationRecord', [])
+
+        for situation in situations:
+            records = situation.get("situationRecord", [])
             if isinstance(records, dict):
                 records = [records]
+
             for rec in records:
-                loc_ref = rec.get('sit:locationReference', {})
-                to_point = loc_ref.get('loc:tpegLinearLocation', {}).get('loc:to', {}).get('loc:pointCoordinates', {})
-                from_point = loc_ref.get('loc:tpegLinearLocation', {}).get('loc:from', {}).get('loc:pointCoordinates', {})
-                if to_point and 'loc:latitude' in to_point and 'loc:longitude' in to_point:
-                    lat = float(to_point['loc:latitude'])
-                    lng = float(to_point['loc:longitude'])
-                elif from_point and 'loc:latitude' in from_point and 'loc:longitude' in from_point:
-                    lat = float(from_point['loc:latitude'])
-                    lng = float(from_point['loc:longitude'])
-                else:
+                # Causa
+                cause = rec.get("cause", {})
+                cause_type = cause.get("causeType")
+                if cause_type != "vehicleObstruction":
                     continue
-                municipality = to_point.get('loc:_tpegNonJunctionPointExtension', {}).get('loc:extendedTpegNonJunctionPoint', {}).get('lse:municipality', 'Desconocida')
+
+                # Coordenadas: try "to", then "from"
+                loc_ref = rec.get("locationReference", {})
+                linear = loc_ref.get("tpegLinearLocation", {})
+
+                lat, lng = None, None
+
+                # To
+                to_pt = linear.get("to", {}) \
+                               .get("pointCoordinates", {})
+                if to_pt:
+                    lat = to_pt.get("latitude")
+                    lng = to_pt.get("longitude")
+
+                # From fallback
+                if not lat or not lng:
+                    from_pt = linear.get("from", {}) \
+                                     .get("pointCoordinates", {})
+                    lat = from_pt.get("latitude")
+                    lng = from_pt.get("longitude")
+
+                if not lat or not lng:
+                    continue
+
+                # Municipality (localidad)
+                municipality = None
+                ext = None
+                try:
+                    ext = to_pt.get("_tpegNonJunctionPointExtension", {}) \
+                               .get("extendedTpegNonJunctionPoint", {})
+                except Exception:
+                    pass
+                municipality = ext.get("municipality") if ext else "Desconocida"
+
+                try:
+                    lat = float(lat)
+                    lng = float(lng)
+                except:
+                    continue
+
+                rec_id = rec.get("@id", str(time.time()))
+
                 balizas.append({
-                    "id": rec.get('@id', str(time.time())),
+                    "id": rec_id,
                     "lat": lat,
                     "lng": lng,
                     "municipality": municipality
                 })
     except Exception as e:
-        print("Error extrayendo balizas:", e)
+        print("Error extract_balizas:", e)
+
+    print(f"Balizas filtradas vehicleObstruction: {len(balizas)}")
     return balizas
 
-# -------------------
-# RUTAS
-# -------------------
+# --- API Endpoints ---
 
 @app.route("/api/balizas")
 def api_balizas():
@@ -90,7 +121,7 @@ def api_balizas():
         balizas = extract_balizas_from_datex2(data)
         return jsonify(balizas)
     except Exception as e:
-        print("Error en /api/balizas:", e)
+        print("Error /api/balizas:", e)
         return jsonify({"error": "No se pudieron obtener balizas"}), 500
 
 @app.route("/api/register", methods=["POST"])
@@ -136,12 +167,11 @@ def send_help():
 
 @app.route("/api/ranking")
 def ranking():
-    users = User.query.order_by(User.xp.desc(), User.level.desc()).limit(10).all()
+    users = User.query.order_by(User.level.desc(), User.xp.desc()).limit(10).all()
     return jsonify([{"username": u.username, "xp": u.xp, "level": u.level} for u in users])
 
-# -------------------
-# INICIO
-# -------------------
+# --- Create DB and Run ---
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
