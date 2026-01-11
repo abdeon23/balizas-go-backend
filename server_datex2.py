@@ -138,20 +138,27 @@ def missions():
     result = [{'id': m.id, 'description': m.description, 'points': m.points} for m in missions_list]
     return jsonify(result)
 
+
 # ---------------------------
 # Inicializar DB con logros y misiones
 # ---------------------------
-@app.before_first_request
 def setup_db():
     db.create_all()
     if Achievement.query.count() == 0:
         # 10 logros de ejemplo
         for i in range(1, 11):
-            db.session.add(Achievement(name=f"Logro {i}", description=f"Descripción del logro {i}", points=i*10))
+            db.session.add(Achievement(
+                name=f"Logro {i}", 
+                description=f"Descripción del logro {i}", 
+                points=i*10
+            ))
     if Mission.query.count() == 0:
         # 5 misiones de ejemplo
         for i in range(1, 6):
-            db.session.add(Mission(description=f"Misión {i}", points=i*5))
+            db.session.add(Mission(
+                description=f"Misión {i}", 
+                points=i*5
+            ))
     db.session.commit()
 
 
@@ -159,8 +166,8 @@ def setup_db():
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
+    setup_db()  # Esto reemplaza before_first_request
     app.run(host="0.0.0.0", port=5000, debug=True)
+
 
 
